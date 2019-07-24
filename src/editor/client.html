@@ -1,0 +1,143 @@
+<!DOCTYPE html> 
+<html> 
+<head> 
+   <title>Gloomhaven Initiative Tracker</title>
+   <style type="text/css">
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+.item {
+}
+   </style>
+</head> 
+
+<body> 
+   <input id="reset-button" type="submit" value="Reset"/>
+   <input id="led-button" type="submit" value="Test LED msg"/>
+   <div id="characters-display" class="container">
+</div>
+</body> 
+
+<script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.21.7.min.js"></script> 
+<script>
+
+class Character
+{
+   name;
+   initiative;
+   ledId;
+   tookTurn;
+   //status; // Chill, Next, Active, Done, Long Resting
+   //playerColor;
+}
+
+class LED
+{
+   id;
+   color;
+   //r;
+   //g;
+   //b;
+}
+
+const Channel = { LED: 'LED', Editor: 'Editor' };
+
+var characterState = [	
+               { ledId: 0, name: 'Carrie', initiative: 99, tookTurn: false },
+               { ledId: 1, name: 'Steph', initiative: 42, tookTurn: false },
+               { ledId: 2, name: 'Victoria', initiative: 37, tookTurn: false },
+               { ledId: 3, name: 'Cameron', initiative: 7, tookTurn: true },
+               { ledId: 4, name: 'Archer', initiative: 69, tookTurn: false },
+               { ledId: 5, name: 'Fairy', initiative: 96, tookTurn: false },
+               { ledId: 6, name: 'A Literal Bear', initiative: 32, tookTurn: false }
+               ]
+               
+function getLEDState( state )
+{
+   state.sort( ( c1, c2 ) => { return c1.initiative - c2.initiative } );
+   let ret = [];
+   let next = false;
+   state.forEach( ( character ) => {
+      if( character.initiative == 99 )
+      {
+         // Long Rest
+         ret.push( { id: character.ledId, color: 2 } );
+         return;
+      }
+      if( character.tookTurn )
+      {
+         // Took Turn
+         ret.push( { id: character.ledId, color: 0 } );
+         return;
+      }
+      if( !next )
+      {
+         next = true;
+         // Up Next
+         ret.push( { id: character.ledId, color: 1 } );
+         return;
+      }
+      // Up Later
+      ret.push( { id: character.ledId, color: 3 } );
+      return;
+   } );
+   return ret;
+}
+
+const pubnub = new PubNub({
+   publishKey : "pub-c-dd027478-1ec9-4843-9e52-68077b71900e",
+   subscribeKey : "sub-c-961f71e0-add2-11e9-a87a-b2acb6d6da6e"
+}); 
+
+const resetButton = document.getElementById('reset-button');
+const ledButton = document.getElementById('led-button');
+
+resetButton.addEventListener('click', () => { 
+   pubnub.publish({
+      channel : Channel.Editor, 
+      message : characterState
+   }, function(status, response) { 
+      //Handle error here 
+   });
+});
+
+ledButton.addEventListener('click', () => {
+   let ledState = getLEDState( characterState );
+   pubnub.publish({
+      channel : Channel.LED, 
+      message : ledState
+   }, function(status, response) { 
+      //Handle error here 
+   });
+   alert( JSON.stringify( ledState ) );
+});
+
+pubnub.subscribe({
+   channels: [Channel.Editor]
+}); 
+
+pubnub.addListener({
+   message: function(event) {
+      let anchor = document.getElementById("characters-display");
+      anchor.innerHTML = '';
+
+      event.message.forEach( ( element ) => {
+         let p = document.createElement('p');
+         p.appendChild(document.createTextNode(JSON.stringify(element))); 
+         anchor.appendChild( p );
+      } );
+   } 
+}); 
+ 
+//actualChannel: null
+//channel: "pubnub_onboarding_channel"
+//message: "Hello From JavaScript SDK"
+//publisher: "pn-c113fe4c-db97-46fa-8c93-da02ac2ef4bd"
+//subscribedChannel: "pubnub_onboarding_channel"
+//subscription: undefined
+//timetoken: "15639460237031577"
+
+</script> 
+</html>

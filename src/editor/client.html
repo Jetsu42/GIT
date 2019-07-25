@@ -25,6 +25,8 @@
    line-height: 69px;
    vertical-align: middle;
    padding-left: 23px;
+   max-width: 690px;
+   //box-sizing: border-box;
 }
 .editing {
    border: 3px dashed black !important;
@@ -38,6 +40,11 @@
 }
 .tookTurn {
    filter: grayscale(1);
+}
+body {
+   background-image: url('./background.jpg');
+   background-size: 100%;
+   background-position: center bottom;
 }
    </style>
 </head> 
@@ -222,8 +229,10 @@ function render()
          p.classList.add( "tookTurn" );
       p.style = `background-color: ${character.color}`;
       p.tabIndex = tab++;
+      p.id = character.name;
       p.appendChild(document.createTextNode( `${character.name} Initiative: ${character.initiative}` ));
       p.onclick = abortEdit;
+      p.onfocus = abortEdit;
       updateTextContent( p, character );
       //p.appendChild(document.createTextNode(JSON.stringify( character ))); 
       anchor.appendChild( p );
@@ -244,6 +253,37 @@ function getCharacterFromElement( elem )
 {
    let name = elem.textContent.split( ' ' )[ 0 ];
    return characterState.find( ( c ) => { return c.name == name; } );
+}
+function getCharacterIndex( character )
+{
+   for( let i = 0; i < characterState.length; i++ )
+   {
+      if( characterState[ i ].name == character.name )
+         return i;
+   }
+   return null;
+}
+function getNextFocus()
+{
+   let character = getFocusedCharacter();
+   if( !character )
+      return null;
+   let index = getCharacterIndex( character );
+   if( index + 1 >= characterState.length )
+      return null;
+   let targetCharacter = characterState[ index + 1 ];
+   return document.getElementById( targetCharacter.name ); 
+}
+function getPreviousFocus()
+{
+   let character = getFocusedCharacter();
+   if( !character )
+      return null;
+   let index = getCharacterIndex( character );
+   if( index - 1 < 0 )
+      return null;
+   let targetCharacter = characterState[ index - 1 ];
+   return document.getElementById( targetCharacter.name ); 
 }
 
 function updateTextContent( elem, character )
@@ -295,9 +335,29 @@ document.addEventListener( 'keydown', ( event ) => {
          character.tookTurn = !character.tookTurn;
          if( characterState.every( ( c ) => { return c.tookTurn; } ) )
             characterState.forEach( ( c ) => { c.tookTurn = false; c.initiative = 0; } );
+         else if( character.tookTurn )
+         {
+            let elem = getNextFocus();
+            if( elem )
+               elem.focus();
+         }
          sortCharacters();
          render();
          break;
+      case 'ArrowDown':
+      {
+         let elem = getNextFocus();
+         if( elem )
+            elem.focus();
+         break;
+      }
+      case 'ArrowUp':
+      {
+         let elem = getPreviousFocus();
+         if( elem )
+            elem.focus();
+         break;
+      }
       default:
          abortEdit();
          break;
@@ -327,8 +387,16 @@ function commitEdit( elem, character )
    {
       sortCharacters();
       render();
+      focusFirstCharacter();
    }
 }
+
+function focusFirstCharacter()
+{
+   let targetCharacter = characterState[ 0 ];
+   document.getElementById( targetCharacter.name ).focus();
+}
+focusFirstCharacter();
 
 //actualChannel: null
 //channel: "pubnub_onboarding_channel"

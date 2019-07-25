@@ -18,6 +18,7 @@
   justify-content: flex-start;
    font-family: 'PirataOne-Regular';
    font-size: 28px;
+   align-items: center;
 }
 .item {
    margin: 0px;
@@ -25,7 +26,7 @@
    line-height: 69px;
    vertical-align: middle;
    padding-left: 23px;
-   max-width: 690px;
+   width: 690px;
    //box-sizing: border-box;
 }
 .editing {
@@ -46,6 +47,9 @@ body {
    background-size: 100%;
    background-position: center bottom;
 }
+input {
+   visibility: hidden;
+}
    </style>
 </head> 
 
@@ -59,25 +63,6 @@ body {
 
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.21.7.min.js"></script> 
 <script>
-
-class Character
-{
-   name;
-   initiative;
-   ledId;
-   tookTurn;
-   //status; // Chill, Next, Active, Done, Long Resting
-   //playerColor;
-}
-
-class LED
-{
-   id;
-   color;
-   //r;
-   //g;
-   //b;
-}
 
 const Channel = { LED: 'LED', Editor: 'Editor', IP: 'player_ip' };
 
@@ -118,7 +103,7 @@ function getLEDState( state )
    let ret = [];
    let distanceToActiveCharacter = 0;
    state.forEach( ( character ) => {
-      if( isInCombat )
+      if( !isInCombat )
       {
          // Not in combat, turn them all off
          ret.push( { id: character.ledId, color: 'black' } );
@@ -175,7 +160,8 @@ resetButton.addEventListener('click', () => {
 });
 
 const usePubnubForLED = false;
-ledButton.addEventListener('click', () => {
+function updateLEDs()
+{
    let ledState = getLEDState( characterState );
    if( usePubnubForLED )
    {
@@ -185,14 +171,18 @@ ledButton.addEventListener('click', () => {
       }, function(status, response) { 
          //Handle error here 
       });
-      alert( JSON.stringify( ledState ) );
+      //alert( JSON.stringify( ledState ) );
    }
    else
    {
       let urls = ledState.map( ( led ) => { return `http://${deviceIpAddress}/?id=${led.id}&color=${led.color}` } );
-      alert( JSON.stringify( urls ) );
+      //alert( JSON.stringify( urls ) );
       urls.forEach( ( url ) => { fetch( url ); } );
    }
+}
+
+ledButton.addEventListener('click', () => {
+   updateLEDs();
 });
 
 ipButton.addEventListener('click', () => {
@@ -206,13 +196,20 @@ ipButton.addEventListener('click', () => {
 });
 
 pubnub.subscribe({
-   channels: [Channel.Editor]
+   channels: [Channel.Editor, Channel.IP]
 }); 
 
 pubnub.addListener({
    message: function(event) {
-      characterState = event.message;
-      render();
+      if( event.channel == Channel.Editor )
+      {
+         characterState = event.message;
+         render();
+      }
+      if( event.channel == Channel.IP )
+      {
+         deviceIpAddress = event.message;
+      }
    }
 });
 
@@ -239,6 +236,7 @@ function render()
       if( oldFocus && oldFocus.name == character.name )
          p.focus();
    } );
+   updateLEDs();
 }
 render();
 

@@ -3,12 +3,41 @@
 <head> 
    <title>Gloomhaven Initiative Tracker</title>
    <style type="text/css">
+@font-face {
+  font-family: "PirataOne-Regular";
+
+  src: url("./fonts/PirataOne-Regular.woff") format("woff"), /* Modern Browsers */
+    url("./fonts/PirataOne-Regular.woff2") format("woff2"); /* Modern Browsers */
+    url('./fonts/PirataOne-Regular.ttf')  format('truetype'), /* Safari, Android, iOS */
+  font-weight: normal;
+  font-style: normal;
+}
 .container {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+   font-family: 'PirataOne-Regular';
+   font-size: 28px;
 }
 .item {
+   margin: 0px;
+   height: 69px;
+   line-height: 69px;
+   vertical-align: middle;
+   padding-left: 23px;
+}
+.editing {
+   border: 3px dashed black !important;
+}
+.item:hover {
+   border: 1px solid black;
+}
+.item:focus {
+   border: 3px solid black;
+   outline: 0;
+}
+.tookTurn {
+   filter: grayscale(1);
 }
    </style>
 </head> 
@@ -16,6 +45,7 @@
 <body> 
    <input id="reset-button" type="submit" value="Reset"/>
    <input id="led-button" type="submit" value="Test LED msg"/>
+   <input id="ip-button" type="submit" value="Test IP msg"/>
    <div id="characters-display" class="container">
 </div>
 </body> 
@@ -42,46 +72,72 @@ class LED
    //b;
 }
 
-const Channel = { LED: 'LED', Editor: 'Editor' };
+const Channel = { LED: 'LED', Editor: 'Editor', IP: 'player_ip' };
 
+var deviceIpAddress = '192.168.1.89';//'10.106.169.109';
 var characterState = [	
-               { ledId: 0, name: 'Carrie', initiative: 99, tookTurn: false },
-               { ledId: 1, name: 'Steph', initiative: 42, tookTurn: false },
-               { ledId: 2, name: 'Victoria', initiative: 37, tookTurn: false },
-               { ledId: 3, name: 'Cameron', initiative: 7, tookTurn: true },
-               { ledId: 4, name: 'Archer', initiative: 69, tookTurn: false },
-               { ledId: 5, name: 'Fairy', initiative: 96, tookTurn: false },
-               { ledId: 6, name: 'A Literal Bear', initiative: 32, tookTurn: false }
-               ]
-               
+               { ledId: 0, name: 'Carrie', initiative: 99, tookTurn: false, color: '#d0a3c5' },
+               { ledId: 1, name: 'Steph', initiative: 42, tookTurn: false, color: '#afb41f' },
+               { ledId: 2, name: 'Victoria', initiative: 37, tookTurn: false, color: '#ebd6cc' },
+               { ledId: 3, name: 'Cameron', initiative: 7, tookTurn: true, color: '#87d4da' },
+               //{ ledId: 4, name: 'Archer', initiative: 69, tookTurn: false, color: 'coral' },
+               //{ ledId: 5, name: 'Fairy', initiative: 96, tookTurn: false, color: 'lavender' },
+               //{ ledId: 6, name: 'A\u00A0Literal\u00A0Bear', initiative: 37, tookTurn: false, color: 'cornflowerblue' }
+               ];
+
+function sortCharacters()
+{   
+   if( inCombat( characterState ) )
+      characterState.sort( ( c1, c2 ) => {
+         if( c1.initiative != c2.initiative )
+            return c1.initiative - c2.initiative
+         return c1.ledId - c2.ledId;
+      } );
+   else
+      characterState.sort( ( c1, c2 ) => {
+         return c1.ledId - c2.ledId;
+      } );
+}
+sortCharacters();
+function inCombat( state )
+{
+   return state.every( ( c ) => { return c.initiative != 0; } );
+}
+
 function getLEDState( state )
 {
+   let isInCombat = inCombat( state );
    state.sort( ( c1, c2 ) => { return c1.initiative - c2.initiative } );
    let ret = [];
-   let next = false;
+   let distanceToActiveCharacter = 0;
    state.forEach( ( character ) => {
+      if( isInCombat )
+      {
+         // Not in combat, turn them all off
+         ret.push( { id: character.ledId, color: 'black' } );
+         return;
+      }
       if( character.initiative == 99 )
       {
          // Long Rest
-         ret.push( { id: character.ledId, color: 2 } );
+         ret.push( { id: character.ledId, color: 'black' } );
          return;
       }
       if( character.tookTurn )
       {
          // Took Turn
-         ret.push( { id: character.ledId, color: 0 } );
+         ret.push( { id: character.ledId, color: 'black' } );
          return;
       }
-      if( !next )
+      let color;
+      switch( distanceToActiveCharacter )
       {
-         next = true;
-         // Up Next
-         ret.push( { id: character.ledId, color: 1 } );
-         return;
+         case 0: color = 'green'; break; // Active
+         case 1: color = 'yellow'; break; // Up Next
+         default: color = 'cyan' // Up Later
       }
-      // Up Later
-      ret.push( { id: character.ledId, color: 3 } );
-      return;
+      distanceToActiveCharacter++;
+      ret.push( { id: character.ledId, color: color } );
    } );
    return ret;
 }
@@ -89,10 +145,18 @@ function getLEDState( state )
 const pubnub = new PubNub({
    publishKey : "pub-c-dd027478-1ec9-4843-9e52-68077b71900e",
    subscribeKey : "sub-c-961f71e0-add2-11e9-a87a-b2acb6d6da6e"
-}); 
+});
+
+pubnub.history({
+   channel: Channel.IP,
+   count: 1,
+}, ( status, response ) => {
+   deviceIpAddress = response.messages[ 0 ].entry;
+});
 
 const resetButton = document.getElementById('reset-button');
 const ledButton = document.getElementById('led-button');
+const ipButton = document.getElementById('ip-button');
 
 resetButton.addEventListener('click', () => { 
    pubnub.publish({
@@ -103,15 +167,35 @@ resetButton.addEventListener('click', () => {
    });
 });
 
+const usePubnubForLED = false;
 ledButton.addEventListener('click', () => {
    let ledState = getLEDState( characterState );
+   if( usePubnubForLED )
+   {
+      pubnub.publish({
+         channel : Channel.LED, 
+         message : ledState
+      }, function(status, response) { 
+         //Handle error here 
+      });
+      alert( JSON.stringify( ledState ) );
+   }
+   else
+   {
+      let urls = ledState.map( ( led ) => { return `http://${deviceIpAddress}/?id=${led.id}&color=${led.color}` } );
+      alert( JSON.stringify( urls ) );
+      urls.forEach( ( url ) => { fetch( url ); } );
+   }
+});
+
+ipButton.addEventListener('click', () => {
    pubnub.publish({
-      channel : Channel.LED, 
-      message : ledState
+      channel : Channel.IP, 
+      message : '10.106.169.109',
    }, function(status, response) { 
       //Handle error here 
    });
-   alert( JSON.stringify( ledState ) );
+   alert( '10.106.169.109');
 });
 
 pubnub.subscribe({
@@ -120,17 +204,132 @@ pubnub.subscribe({
 
 pubnub.addListener({
    message: function(event) {
-      let anchor = document.getElementById("characters-display");
-      anchor.innerHTML = '';
+      characterState = event.message;
+      render();
+   }
+});
 
-      event.message.forEach( ( element ) => {
-         let p = document.createElement('p');
-         p.appendChild(document.createTextNode(JSON.stringify(element))); 
-         anchor.appendChild( p );
-      } );
-   } 
-}); 
- 
+function render()
+{
+   let oldFocus = getFocusedCharacter();
+   let anchor = document.getElementById("characters-display");
+   let tab = 1;
+   anchor.innerHTML = '';
+   characterState.forEach( ( character ) => {
+      let p = document.createElement('div');
+      p.classList.add( "item" );
+      if( character.tookTurn )
+         p.classList.add( "tookTurn" );
+      p.style = `background-color: ${character.color}`;
+      p.tabIndex = tab++;
+      p.appendChild(document.createTextNode( `${character.name} Initiative: ${character.initiative}` ));
+      p.onclick = abortEdit;
+      updateTextContent( p, character );
+      //p.appendChild(document.createTextNode(JSON.stringify( character ))); 
+      anchor.appendChild( p );
+      if( oldFocus && oldFocus.name == character.name )
+         p.focus();
+   } );
+}
+render();
+
+function getFocusedCharacter()
+{
+   if( !document.activeElement.classList.contains( 'item' ) )
+      return null;
+
+   return getCharacterFromElement( document.activeElement );
+}
+function getCharacterFromElement( elem )
+{
+   let name = elem.textContent.split( ' ' )[ 0 ];
+   return characterState.find( ( c ) => { return c.name == name; } );
+}
+
+function updateTextContent( elem, character )
+{
+   if( elem.classList.contains( 'editing' ) )
+      elem.textContent = `${character.name} Initiative: ${character.uncommitedInitiative}`;
+   else
+      elem.textContent = `${character.name} Initiative: ${character.initiative}`;
+}
+
+document.addEventListener( 'keydown', ( event ) => {
+   if( !document.activeElement.classList.contains( 'item' ) )
+      return;
+
+   let character = getFocusedCharacter();
+   switch( event.key )
+   {
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+         if( !document.activeElement.classList.contains( 'editing' ) )
+         {
+            document.activeElement.classList.add( 'editing' );
+            character.uncommitedInitiative = event.key;
+            //document.activeElement.textContent = `${character.name} Initiative: ${event.key}`;
+            updateTextContent( document.activeElement, character );
+         }
+         else
+         {
+            //document.activeElement.textContent += event.key;
+            character.uncommitedInitiative += event.key;
+            commitEdit( document.activeElement, character );
+         }
+         break;
+      case 'Enter':
+         //character.initiative = parseInt( character.uncommitedInitiative );
+         //character.uncommitedInitiative = undefined;
+         //document.activeElement.classList.remove( 'editing' );
+         commitEdit( document.activeElement, character );
+         break;
+      case 't':
+         character.tookTurn = !character.tookTurn;
+         if( characterState.every( ( c ) => { return c.tookTurn; } ) )
+            characterState.forEach( ( c ) => { c.tookTurn = false; c.initiative = 0; } );
+         sortCharacters();
+         render();
+         break;
+      default:
+         abortEdit();
+         break;
+   }
+});
+
+function abortEdit()
+{
+   let editedElements = document.getElementsByClassName( 'editing' );
+   Array.from( editedElements ).forEach( ( elem ) => {
+      elem.classList.remove( 'editing' );
+      let character = getCharacterFromElement( elem );
+      updateTextContent( elem, character );
+      character.uncommitedInitiative = undefined;
+   } );
+}
+
+function commitEdit( elem, character )
+{
+   let wasInCombat = inCombat( characterState );
+   character.initiative = parseInt( character.uncommitedInitiative );
+   character.uncommitedInitiative = undefined;
+   elem.classList.remove( 'editing' );
+   updateTextContent( elem, character );
+   let isInCombat = inCombat( characterState );
+   if( wasInCombat != isInCombat )
+   {
+      sortCharacters();
+      render();
+   }
+}
+
 //actualChannel: null
 //channel: "pubnub_onboarding_channel"
 //message: "Hello From JavaScript SDK"

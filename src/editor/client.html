@@ -68,7 +68,7 @@ const Channel = { LED: 'LED', Editor: 'Editor', IP: 'player_ip' };
 
 var deviceIpAddress = '192.168.1.89';//'10.106.169.109';
 var characterState = [	
-               { ledId: 0, name: 'Carrie', initiative: 99, tookTurn: false, color: '#d0a3c5' },
+               { ledId: 0, name: 'Carrie', initiative: 98, tookTurn: false, color: '#d0a3c5' },
                { ledId: 1, name: 'Steph', initiative: 42, tookTurn: false, color: '#afb41f' },
                { ledId: 2, name: 'Victoria', initiative: 37, tookTurn: false, color: '#ebd6cc' },
                { ledId: 3, name: 'Cameron', initiative: 7, tookTurn: false, color: '#87d4da' },
@@ -87,7 +87,8 @@ function sortCharacters()
       } );
    else
       characterState.sort( ( c1, c2 ) => {
-         return c1.ledId - c2.ledId;
+         // sort by reverse led order for demo (me the last character should always go first)
+         return c2.ledId - c1.ledId;
       } );
 }
 sortCharacters();
@@ -227,7 +228,7 @@ function render()
       p.style = `background-color: ${character.color}`;
       p.tabIndex = tab++;
       p.id = character.name;
-      p.appendChild(document.createTextNode( `${character.name} Initiative: ${character.initiative}` ));
+      p.appendChild(document.createTextNode( `` ));
       p.onclick = () => { abortEdit( false /*fIncludeActive*/ ); };
       p.onfocus = () => { abortEdit( false /*fIncludeActive*/ ); };
       updateTextContent( p, character );
@@ -309,7 +310,7 @@ document.addEventListener( 'keydown', ( event ) => {
       case '7':
       case '8':
       case '9':
-         if( !document.activeElement.classList.contains( 'editing' ) )
+         if( character.uncommitedInitiative == null )
          {
             character.uncommitedInitiative = event.key;
             render();

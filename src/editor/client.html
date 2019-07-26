@@ -71,7 +71,7 @@ var characterState = [
                { ledId: 0, name: 'Carrie', initiative: 99, tookTurn: false, color: '#d0a3c5' },
                { ledId: 1, name: 'Steph', initiative: 42, tookTurn: false, color: '#afb41f' },
                { ledId: 2, name: 'Victoria', initiative: 37, tookTurn: false, color: '#ebd6cc' },
-               { ledId: 3, name: 'Cameron', initiative: 7, tookTurn: true, color: '#87d4da' },
+               { ledId: 3, name: 'Cameron', initiative: 7, tookTurn: false, color: '#87d4da' },
                //{ ledId: 4, name: 'Archer', initiative: 69, tookTurn: false, color: 'coral' },
                //{ ledId: 5, name: 'Fairy', initiative: 96, tookTurn: false, color: 'lavender' },
                //{ ledId: 6, name: 'A\u00A0Literal\u00A0Bear', initiative: 37, tookTurn: false, color: 'cornflowerblue' }
@@ -380,11 +380,11 @@ function commitEdit( elem, character )
    character.uncommitedInitiative = undefined;
    elem.classList.remove( 'editing' );
    updateTextContent( elem, character );
+   sortCharacters();
+   render();
    let isInCombat = inCombat( characterState );
    if( wasInCombat != isInCombat )
    {
-      sortCharacters();
-      render();
       focusFirstCharacter();
    }
 }

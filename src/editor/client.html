@@ -465,11 +465,12 @@ function commitEdit( elem, character )
    if( isNaN( uncommitedInitiative ) )
       return;
    let wasInCombat = inCombat( characterState );
+   let someTurnsTook = characterState.some( ( c ) => { return c.tookTurn; } );
    character.initiative = uncommitedInitiative;
    character.uncommitedInitiative = undefined;
    let isInCombat = inCombat( characterState );
    render();
-   if( wasInCombat != isInCombat )
+   if( wasInCombat != isInCombat && !someTurnsTook )
       focusFirstCharacter();
 }
 

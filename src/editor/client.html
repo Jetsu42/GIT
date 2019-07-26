@@ -27,7 +27,7 @@
    vertical-align: middle;
    padding-left: 23px;
    width: 690px;
-   //box-sizing: border-box;
+   /*box-sizing: border-box;*/
 }
 .editing {
    border: 3px dashed black !important;
@@ -99,7 +99,7 @@ function inCombat( state )
 function getLEDState( state )
 {
    let isInCombat = inCombat( state );
-   state.sort( ( c1, c2 ) => { return c1.initiative - c2.initiative } );
+   sortCharacters();
    let ret = [];
    let distanceToActiveCharacter = 0;
    state.forEach( ( character ) => {
@@ -159,26 +159,23 @@ resetButton.addEventListener('click', () => {
    });
 });
 
-const usePubnubForLED = false;
 function updateLEDs()
 {
    let ledState = getLEDState( characterState );
-   if( usePubnubForLED )
-   {
-      pubnub.publish({
-         channel : Channel.LED, 
-         message : ledState
-      }, function(status, response) { 
-         //Handle error here 
-      });
-      //alert( JSON.stringify( ledState ) );
-   }
-   else
-   {
-      let urls = ledState.map( ( led ) => { return `http://${deviceIpAddress}/?id=${led.id}&color=${led.color}` } );
-      //alert( JSON.stringify( urls ) );
-      urls.forEach( ( url ) => { fetch( url ); } );
-   }
+   
+   // Publish to pubnub
+   pubnub.publish({
+      channel : Channel.LED, 
+      message : ledState
+   }, function(status, response) { 
+      //Handle error here 
+   });
+   //alert( JSON.stringify( ledState ) );
+   
+   // Try to talk directly to the device if it's on the same network
+   let urls = ledState.map( ( led ) => { return `http://${deviceIpAddress}/?id=${led.id}&color=${led.color}` } );
+   //alert( JSON.stringify( urls ) );
+   urls.forEach( ( url ) => { fetch( url ); } );
 }
 
 ledButton.addEventListener('click', () => {
@@ -203,8 +200,8 @@ pubnub.addListener({
    message: function(event) {
       if( event.channel == Channel.Editor )
       {
-         characterState = event.message;
-         render();
+         //characterState = event.message;
+         //render();
       }
       if( event.channel == Channel.IP )
       {
@@ -215,6 +212,7 @@ pubnub.addListener({
 
 function render()
 {
+   sortCharacters();
    let oldFocus = getFocusedCharacter();
    let anchor = document.getElementById("characters-display");
    let tab = 1;
@@ -224,12 +222,14 @@ function render()
       p.classList.add( "item" );
       if( character.tookTurn )
          p.classList.add( "tookTurn" );
+      if( character.uncommitedInitiative )
+         p.classList.add( "editing" );
       p.style = `background-color: ${character.color}`;
       p.tabIndex = tab++;
       p.id = character.name;
       p.appendChild(document.createTextNode( `${character.name} Initiative: ${character.initiative}` ));
-      p.onclick = abortEdit;
-      p.onfocus = abortEdit;
+      p.onclick = () => { abortEdit( false /*fIncludeActive*/ ); };
+      p.onfocus = () => { abortEdit( false /*fIncludeActive*/ ); };
       updateTextContent( p, character );
       //p.appendChild(document.createTextNode(JSON.stringify( character ))); 
       anchor.appendChild( p );
@@ -311,22 +311,16 @@ document.addEventListener( 'keydown', ( event ) => {
       case '9':
          if( !document.activeElement.classList.contains( 'editing' ) )
          {
-            document.activeElement.classList.add( 'editing' );
             character.uncommitedInitiative = event.key;
-            //document.activeElement.textContent = `${character.name} Initiative: ${event.key}`;
-            updateTextContent( document.activeElement, character );
+            render();
          }
          else
          {
-            //document.activeElement.textContent += event.key;
             character.uncommitedInitiative += event.key;
             commitEdit( document.activeElement, character );
          }
          break;
       case 'Enter':
-         //character.initiative = parseInt( character.uncommitedInitiative );
-         //character.uncommitedInitiative = undefined;
-         //document.activeElement.classList.remove( 'editing' );
          commitEdit( document.activeElement, character );
          break;
       case 't':
@@ -339,7 +333,6 @@ document.addEventListener( 'keydown', ( event ) => {
             if( elem )
                elem.focus();
          }
-         sortCharacters();
          render();
          break;
       case 'ArrowDown':
@@ -357,36 +350,38 @@ document.addEventListener( 'keydown', ( event ) => {
          break;
       }
       default:
-         abortEdit();
+         abortEdit( true /*fIncludeActive*/ );
          break;
    }
 });
 
-function abortEdit()
+function abortEdit( fIncludeActive )
 {
    let editedElements = document.getElementsByClassName( 'editing' );
+   let reverted = false;
    Array.from( editedElements ).forEach( ( elem ) => {
-      elem.classList.remove( 'editing' );
+      if( !fIncludeActive && document.activeElement == elem )
+         return;
       let character = getCharacterFromElement( elem );
-      updateTextContent( elem, character );
       character.uncommitedInitiative = undefined;
+      reverted = true;
    } );
+   if( reverted )
+      render();
 }
 
 function commitEdit( elem, character )
 {
+   let uncommitedInitiative = parseInt( character.uncommitedInitiative );
+   if( isNaN( uncommitedInitiative ) )
+      return;
    let wasInCombat = inCombat( characterState );
-   character.initiative = parseInt( character.uncommitedInitiative );
+   character.initiative = uncommitedInitiative;
    character.uncommitedInitiative = undefined;
-   elem.classList.remove( 'editing' );
-   updateTextContent( elem, character );
-   sortCharacters();
-   render();
    let isInCombat = inCombat( characterState );
+   render();
    if( wasInCombat != isInCombat )
-   {
       focusFirstCharacter();
-   }
 }
 
 function focusFirstCharacter()

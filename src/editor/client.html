@@ -65,12 +65,14 @@ input {
 <script>
 
 const Channel = { LED: 'LED', Editor: 'Editor', IP: 'player_ip' };
+const AvailableLEDs = [ 0, 1, 2, 3, 4, 5, 6, 7, 8 ];
+const AvailableCharacterColors = [ '#d98826' /*spears*/, '#a5d167' /*ninja*/ ];
 
 var deviceIpAddress = '192.168.1.89';//'10.106.169.109';
 var characterState = [	
                { ledId: 0, name: 'Carrie', initiative: 98, tookTurn: false, color: '#d0a3c5' },
                { ledId: 1, name: 'Steph', initiative: 42, tookTurn: false, color: '#afb41f' },
-               { ledId: 2, name: 'Victoria', initiative: 37, tookTurn: false, color: '#ebd6cc' },
+               { ledId: 2, name: 'Victoria', initiative: 37, tookTurn: false, color: '#c5b58d' /*'#ebd6cc'*/ },
                { ledId: 3, name: 'Cameron', initiative: 7, tookTurn: false, color: '#87d4da' },
                //{ ledId: 4, name: 'Archer', initiative: 69, tookTurn: false, color: 'coral' },
                //{ ledId: 5, name: 'Fairy', initiative: 96, tookTurn: false, color: 'lavender' },
@@ -104,6 +106,9 @@ function getLEDState( state )
    let ret = [];
    let distanceToActiveCharacter = 0;
    state.forEach( ( character ) => {
+      // The box does not support enemies yet!
+      if( character.ledId >= 4 )
+         return;
       if( !isInCombat )
       {
          // Not in combat, turn them all off
@@ -145,6 +150,8 @@ pubnub.history({
    count: 1,
 }, ( status, response ) => {
    deviceIpAddress = response.messages[ 0 ].entry.ipAddress;
+   render();
+   focusFirstCharacter();
 });
 
 const resetButton = document.getElementById('reset-button');
@@ -223,23 +230,26 @@ function render()
       p.classList.add( "item" );
       if( character.tookTurn )
          p.classList.add( "tookTurn" );
-      if( character.uncommitedInitiative )
+      if( character.uncommitedInitiative || character.uncommitedName != null )
          p.classList.add( "editing" );
       p.style = `background-color: ${character.color}`;
       p.tabIndex = tab++;
-      p.id = character.name;
-      p.appendChild(document.createTextNode( `` ));
-      p.onclick = () => { abortEdit( false /*fIncludeActive*/ ); };
-      p.onfocus = () => { abortEdit( false /*fIncludeActive*/ ); };
-      updateTextContent( p, character );
+      p.id = character.ledId;
+      let text =  `${character.uncommitedName || character.name} Initiative: ${character.uncommitedInitiative || character.initiative}`;
+      p.appendChild(document.createTextNode( text ));
+      p.onclick = ( event ) => { abortEdit( false /*fIncludeActive*/ ); };
+      p.onfocus = ( event ) => { abortEdit( false /*fIncludeActive*/ ); };
       //p.appendChild(document.createTextNode(JSON.stringify( character ))); 
       anchor.appendChild( p );
-      if( oldFocus && oldFocus.name == character.name )
-         p.focus();
    } );
+   let focus = characterState.find( ( c ) => c.uncommitedName != null );
+   if( !focus )
+      focus = oldFocus;
+   if( !focus )
+      focus = characterState[ 0 ];
+   document.getElementById( focus.ledId ).focus();
    updateLEDs();
 }
-render();
 
 function getFocusedCharacter()
 {
@@ -250,14 +260,13 @@ function getFocusedCharacter()
 }
 function getCharacterFromElement( elem )
 {
-   let name = elem.textContent.split( ' ' )[ 0 ];
-   return characterState.find( ( c ) => { return c.name == name; } );
+   return characterState.find( ( c ) => { return c.ledId == elem.id; } );
 }
 function getCharacterIndex( character )
 {
    for( let i = 0; i < characterState.length; i++ )
    {
-      if( characterState[ i ].name == character.name )
+      if( characterState[ i ].ledId == character.ledId )
          return i;
    }
    return null;
@@ -271,7 +280,7 @@ function getNextFocus()
    if( index + 1 >= characterState.length )
       return null;
    let targetCharacter = characterState[ index + 1 ];
-   return document.getElementById( targetCharacter.name ); 
+   return document.getElementById( targetCharacter.ledId ); 
 }
 function getPreviousFocus()
 {
@@ -282,22 +291,28 @@ function getPreviousFocus()
    if( index - 1 < 0 )
       return null;
    let targetCharacter = characterState[ index - 1 ];
-   return document.getElementById( targetCharacter.name ); 
-}
-
-function updateTextContent( elem, character )
-{
-   if( elem.classList.contains( 'editing' ) )
-      elem.textContent = `${character.name} Initiative: ${character.uncommitedInitiative}`;
-   else
-      elem.textContent = `${character.name} Initiative: ${character.initiative}`;
+   return document.getElementById( targetCharacter.ledId ); 
 }
 
 document.addEventListener( 'keydown', ( event ) => {
    if( !document.activeElement.classList.contains( 'item' ) )
+   {
+      if( event.key == 'ArrowDown' )
+         focusFirstCharacter();
+      else if( event.key == 'ArrowUp' )
+      {
+         let targetCharacter = characterState[ characterState.length - 1 ];
+         document.getElementById( targetCharacter.ledId ).focus();
+      }
       return;
+   }
 
    let character = getFocusedCharacter();
+   if( character.uncommitedName != null )
+   {
+      handleNewMonsterKey( character, event.key );
+      return;
+   }
    switch( event.key )
    {
       case '0':
@@ -321,6 +336,12 @@ document.addEventListener( 'keydown', ( event ) => {
             commitEdit( document.activeElement, character );
          }
          break;
+      case 'Backspace':
+         if( character.uncommitedInitiative == null )
+            break;
+         if( character.uncommitedInitiative != '' )
+            character.uncommitedInitiative = character.uncommitedInitiative.slice( 0, -1 );
+         break;
       case 'Enter':
          commitEdit( document.activeElement, character );
          break;
@@ -334,6 +355,22 @@ document.addEventListener( 'keydown', ( event ) => {
             if( elem )
                elem.focus();
          }
+         render();
+         break;
+      case 'n':
+      case 'm':
+         let newLed = getNextLed();
+         let newColor = getNextCharacterColor();
+         if( newLed >= 0 && newColor )
+         {
+            characterState.push( { ledId: newLed, name: '<Monster Name>', uncommitedName: '', initiative: 0, tookTurn: false, color: newColor } );
+            render();
+         }
+         break;
+      case 'r':
+         if( character.ledId < 4 )
+            return;
+         removeCharacter( character );
          render();
          break;
       case 'ArrowDown':
@@ -356,6 +393,50 @@ document.addEventListener( 'keydown', ( event ) => {
    }
 });
 
+function handleNewMonsterKey( character, key )
+{
+   if( key.match(/^[a-z]$/i) )
+      character.uncommitedName += key;
+   else if( key == ' ' )
+      character.uncommitedName += '\u00A0';
+   else if( key == 'Backspace' )
+   {
+      if( character.uncommitedName != '' )
+         character.uncommitedName = character.uncommitedName.slice( 0, -1 );
+   }
+   else if( key == 'Enter' && character.uncommitedName != '' )
+   {
+      character.name = character.uncommitedName;
+      character.uncommitedName = undefined;
+   }
+   else if( key != 'Shift' )
+      abortEdit( true /*fIncludeActive*/ );
+   render();
+}
+
+function getNextLed()
+{
+   for( let i = 0; i < AvailableLEDs.length; i++ )
+      if( characterState.every( ( c ) => { return c.ledId != AvailableLEDs[ i ]; } ) )
+         return AvailableLEDs[ i ];
+   return -1;
+}
+
+function getNextCharacterColor()
+{
+   for( let i = 0; i < AvailableCharacterColors.length; i++ )
+      if( characterState.every( ( c ) => { return c.color != AvailableCharacterColors[ i ]; } ) )
+         return AvailableCharacterColors[ i ];
+   return null;
+}
+
+function removeCharacter( character )
+{
+   let index = characterState.indexOf( character );
+   if( index !== -1 )
+      characterState.splice( index, 1 );
+}
+
 function abortEdit( fIncludeActive )
 {
    let editedElements = document.getElementsByClassName( 'editing' );
@@ -365,6 +446,13 @@ function abortEdit( fIncludeActive )
          return;
       let character = getCharacterFromElement( elem );
       character.uncommitedInitiative = undefined;
+      if( character.uncommitedName == '' )
+         removeCharacter( character );
+      else if( character.uncommitedName != null )
+      {
+         character.name = character.uncommitedName;
+         character.uncommitedName = undefined;
+      }
       reverted = true;
    } );
    if( reverted )
@@ -388,9 +476,8 @@ function commitEdit( elem, character )
 function focusFirstCharacter()
 {
    let targetCharacter = characterState[ 0 ];
-   document.getElementById( targetCharacter.name ).focus();
+   document.getElementById( targetCharacter.ledId ).focus();
 }
-focusFirstCharacter();
 
 //actualChannel: null
 //channel: "pubnub_onboarding_channel"

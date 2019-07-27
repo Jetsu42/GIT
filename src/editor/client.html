@@ -218,6 +218,7 @@ pubnub.addListener({
    }
 });
 
+const useTable = true;
 function render()
 {
    sortCharacters();
@@ -226,22 +227,41 @@ function render()
    let tab = 1;
    anchor.innerHTML = '';
    characterState.forEach( ( character ) => {
-      let p = document.createElement('div');
-      p.classList.add( "item" );
+      let elItem = document.createElement('div');
+      elItem.classList.add( "item" );
       if( character.tookTurn )
-         p.classList.add( "tookTurn" );
+         elItem.classList.add( "tookTurn" );
       if( character.uncommitedInitiative || character.uncommitedName != null )
-         p.classList.add( "editing" );
-      p.style = `background-color: ${character.color}`;
-      p.tabIndex = tab++;
-      p.id = character.ledId;
-      let text =  `${character.uncommitedName || character.name} Initiative: ${character.uncommitedInitiative || character.initiative}`;
-      p.appendChild(document.createTextNode( text ));
-      p.onclick = ( event ) => { abortEdit( false /*fIncludeActive*/ ); };
-      p.onfocus = ( event ) => { abortEdit( false /*fIncludeActive*/ ); };
-      //p.appendChild(document.createTextNode(JSON.stringify( character ))); 
-      anchor.appendChild( p );
+         elItem.classList.add( "editing" );
+      elItem.style = `background-color: ${character.color}`;
+      elItem.tabIndex = tab++;
+      elItem.id = character.ledId;
+
+      if( useTable )
+      {
+         let elCharacterName = document.createElement('span');
+         elCharacterName.textContent = character.uncommitedName || character.name;
+         elCharacterName.classList.add( 'CharacterName' );
+         elCharacterName.style.display = 'inline-block';
+         elItem.appendChild( elCharacterName );
+
+         let elInitiative = document.createElement('span');
+         elInitiative.textContent = `Initiative: ${character.uncommitedInitiative || character.initiative}`
+         elItem.appendChild( elInitiative );
+      }
+      else
+      {
+         let text =  `${character.uncommitedName || character.name} Initiative: ${character.uncommitedInitiative || character.initiative}`;
+         elItem.appendChild(document.createTextNode( text ));
+      }
+
+      elItem.onclick = ( event ) => { abortEdit( false /*fIncludeActive*/ ); };
+      elItem.onfocus = ( event ) => { abortEdit( false /*fIncludeActive*/ ); };
+      //elItem.appendChild(document.createTextNode(JSON.stringify( character ))); 
+      anchor.appendChild( elItem );
    } );
+
+   adjustTable();
    let focus = characterState.find( ( c ) => c.uncommitedName != null );
    if( !focus )
       focus = oldFocus;
@@ -249,6 +269,17 @@ function render()
       focus = characterState[ 0 ];
    document.getElementById( focus.ledId ).focus();
    updateLEDs();
+}
+
+function adjustTable()
+{
+   if( !useTable )
+      return;
+   let characterNames = Array.from( document.getElementsByClassName( 'CharacterName') );
+   let width = characterNames.reduce( ( biggestWidth, el ) => { return el.offsetWidth > biggestWidth ? el.offsetWidth : biggestWidth; }, 0 );
+   characterNames.forEach( ( el ) => {
+      el.style.width = width + 15 + 'px';
+   } );
 }
 
 function getFocusedCharacter()

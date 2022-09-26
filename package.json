@@ -5,7 +5,7 @@
   "main": "index.js",
   "dependencies": {
     "johnny-five": "^1.2.0",
-    "pubnub": "^4.24.3"
+    "pubnub": "^4.37.0"
   },
   "devDependencies": {},
   "scripts": {
